@@ -75,6 +75,8 @@ volatile unsigned long *gpio_pudclk = NULL;
 struct gt1151_ts_priv {
 	struct i2c_client *client; /* I2C 设备 */
 	struct input_dev *input;   /* 输入设备结构体 */
+	struct delayed_work work;  /* 延迟工作队列 */  
+    struct mutex mutex;        /* 互斥体 */
 	int irq;                   /* 中断 */
 };
 
@@ -166,21 +168,56 @@ typedef struct _tp_str{
 const u16 GT1151_TPX_TBL[10]={GT_TP1_REG,GT_TP2_REG,GT_TP3_REG,GT_TP4_REG,GT_TP5_REG,GT_TP6_REG,GT_TP7_REG,GT_TP8_REG,GT_TP9_REG,GT_TP10_REG};
 tp_str tp_str_now;
 
-/* 中断服务子程序*/
-static irqreturn_t gt1151_ts_irq(int irq, void *dev_id)
-{
-	struct gt1151_ts_priv *priv = dev_id;
-      u8 num=0,i;
+
+//延迟工作队列
+static void gt1151_ts_poscheck(struct work_struct *work)  
+{  
+    struct it7260_ts_priv *priv = container_of(work,   
+                struct it7260_ts_priv, work.work);  
+    unsigned char buf[14];  
+    unsigned short xpos[3] = {0}, ypos[3] = {0};  
+    unsigned char event[3] = {0};  
+    unsigned char query = 0;  
+    int ret, i;  
+  
+    mutex_lock(&priv->mutex);  
+  
+     
+  
+out:  
+    mutex_unlock(&priv->mutex);  
+    enable_irq(priv->irq);  
+}  
+
+
+
+
+
+//延迟工作队列
+static void gt1151_ts_poscheck(struct work_struct *work)  
+{  
+    struct gt1151_ts_priv *priv = container_of(work,struct gt1151_ts_priv, work.work);  
+    u8 num=0,i;
 	unsigned char temp;
 	u8 buf[5];
 	int ret;
+	
+	mutex_lock(&priv->mutex); 
+	
 	//读取触摸点的状态
 	ret=i2c_master_read_gt1151(priv->client,GT_GSTID_REG, &temp, 1);
-	printk("ret:%d\r\n",ret);
-	if(temp&0x80)
+	if(ret<0)
 	{
-	num=temp&0x0f;
+		printk("ret:%d\r\n",ret);
+		goto out;
+	}
 	
+	if(temp&0x80==0)
+	{
+		goto out;
+	}
+	
+	num=temp&0x0f;
 	if((num < 11)&&(num != 0))
 	{
 		//printk("n:%d\r\n",num);
@@ -202,12 +239,27 @@ static irqreturn_t gt1151_ts_irq(int irq, void *dev_id)
 		}
 		//input_sync(priv->input);
 	}
-	}
+	
 	temp=0x00;
 	i2c_master_write_gt1151(priv->client,GT_GSTID_REG, &temp, 1);
-	return IRQ_HANDLED;
+	
+	
+out:  
+    mutex_unlock(&priv->mutex);  
+    enable_irq(priv->irq);
 }
 
+
+/* 中断服务子程序，产生中断后，延迟(HZ/20)个tick后调度工作 */  
+static irqreturn_t gt1151_ts_irq(int irq, void *dev_id)  
+{  
+    struct gt1151_ts_priv *priv = dev_id;  
+  
+    disable_irq_nosync(irq);  
+    schedule_delayed_work(&priv->work, HZ / 20);  
+  
+    return IRQ_HANDLED;  
+} 
 /**
 * gt1151_identify_capsensor - identify capacitance sensor model
 *
@@ -327,7 +379,10 @@ static int gt1151_ts_probe(struct i2c_client *client,
 		error = -ENOMEM;
 		goto err0;
 	}
-
+	
+	/* 初始化mutex */  
+    mutex_init(&priv->mutex); 
+	
 	dev_set_drvdata(&client->dev, priv);
 
 	/* 分配一个input设备 */
@@ -355,6 +410,9 @@ static int gt1151_ts_probe(struct i2c_client *client,
 	priv->client = client;
 	priv->input = input;
 
+	/* 初始化延迟工作队列 */  
+    INIT_DELAYED_WORK(&priv->work, gt1151_ts_poscheck);
+	
 	/* 向输入子系统注册此input设备 */
 	error = input_register_device(input);
 	if (error) {
