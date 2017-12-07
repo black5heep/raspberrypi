@@ -122,6 +122,7 @@ static int i2c_master_read_gt1151(struct i2c_client *client,
 	return (ret == 2) ? len_data : ret;
 }
 
+
 /**
 * i2c_master_write_gt1151 - issue a single I2C message in master transmit mode
 * @client: handler to slave device
@@ -172,18 +173,21 @@ static irqreturn_t gt1151_ts_irq(int irq, void *dev_id)
       u8 num=0,i;
 	unsigned char temp;
 	u8 buf[5];
+	int ret;
 	//读取触摸点的状态
-	i2c_master_read_gt1151(priv->client,GT_GSTID_REG, &temp, 1);
+	ret=i2c_master_read_gt1151(priv->client,GT_GSTID_REG, &temp, 1);
+	printk("ret:%d\r\n",ret);
 	if(temp&0x80)
 	{
 	num=temp&0x0f;
 	
 	if((num < 11)&&(num != 0))
 	{
-		printk("n:%d\r\n",num);
+		//printk("n:%d\r\n",num);
 		//for(i=0;i<num;i++)
 		{
-			i2c_master_read_gt1151(priv->client,GT1151_TPX_TBL[i], buf, 5);
+			ret=i2c_master_read_gt1151(priv->client,GT1151_TPX_TBL[i], buf, 5);
+			printk("ret=:%d\r\n",ret);
 			tp_str_now.tp_id[i]=buf[0]&0x0f;
 			tp_str_now.tp_x[i]=((u16)buf[2]<<8)+buf[1];
 			tp_str_now.tp_y[i]=((u16)buf[4]<<8)+buf[3];
@@ -233,7 +237,7 @@ void short_wait(void)
 void int_set_down(void)
 {
 	*gpio_pud &= ~3;
-	*gpio_pud |= 1;
+	*gpio_pud |= 0;
 	short_wait();
 	*gpio_pudclk = 1<< INT_PIN;
 	short_wait();
