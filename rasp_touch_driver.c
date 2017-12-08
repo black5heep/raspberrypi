@@ -169,12 +169,13 @@ typedef struct _tp_str{
 const u16 GT1151_TPX_TBL[10]={GT_TP1_REG,GT_TP2_REG,GT_TP3_REG,GT_TP4_REG,GT_TP5_REG,GT_TP6_REG,GT_TP7_REG,GT_TP8_REG,GT_TP9_REG,GT_TP10_REG};
 tp_str tp_str_now;
 
-
+u8 last_id[10];
+u8 last_num;
 //延迟工作队列
 static void gt1151_ts_poscheck(struct work_struct *work)  
 {  
     struct gt1151_ts_priv *priv = container_of(work,struct gt1151_ts_priv, work.work);  
-    u8 num=0,i;
+    u8 num=0,i,j;
 	unsigned char temp;
 	u8 buf[5];
 	int ret;
@@ -195,7 +196,7 @@ static void gt1151_ts_poscheck(struct work_struct *work)
 	}
 	
 	num=temp&0x0f;
-	if((num < 11)&&(num != 0))
+	if(num < 11)
 	{
 		//printk("n:%d\r\n",num);
 		for(i=0;i<num;i++)
@@ -209,21 +210,45 @@ static void gt1151_ts_poscheck(struct work_struct *work)
 			printk("x:%d  y:%d\r\n",tp_str_now.tp_x[i],tp_str_now.tp_y[i]);
 			
 			input_mt_slot(priv->input, tp_str_now.tp_id[i]);
-			if(buf[0]&0x08)
-			{
-				input_mt_report_slot_state(priv->input, MT_TOOL_FINGER, true);
-				input_report_abs(priv->input, ABS_MT_POSITION_X, tp_str_now.tp_x[i]);
-				input_report_abs(priv->input, ABS_MT_POSITION_Y, tp_str_now.tp_y[i]);
-				//input_report_abs(priv->input, ABS_MT_TOUCH_MAJOR, input_w);
-				//input_report_abs(priv->input, ABS_MT_WIDTH_MAJOR, input_w);
-			}else
-			{
-				up++;
-				input_mt_report_slot_state(priv->input, MT_TOOL_FINGER, false);
-			}
+			
+			input_mt_report_slot_state(priv->input, MT_TOOL_FINGER, true);
+			input_report_abs(priv->input, ABS_MT_POSITION_X, tp_str_now.tp_x[i]);
+			input_report_abs(priv->input, ABS_MT_POSITION_Y, tp_str_now.tp_y[i]);
+			//input_report_abs(priv->input, ABS_MT_TOUCH_MAJOR, input_w);
+			//input_report_abs(priv->input, ABS_MT_WIDTH_MAJOR, input_w);
+			
 			input_mt_sync(priv->input);
 		}
-		if(up==num)
+		
+		if(num<last_num)
+		{
+			for(i=0;i<last_num;i++)
+			{
+				u8 flag=0;
+				for(j=0;j<num;j++)
+				{
+					if(tp_str_now.tp_id[j]==last_id[i])
+					{
+						flag=1;
+						break;
+					}		
+				}
+				if(flag==0)
+				{
+					input_mt_slot(priv->input, last_id[i]);
+					input_mt_report_slot_state(priv->input, MT_TOOL_FINGER, false);
+					input_mt_sync(priv->input);
+				}
+				
+			}
+		}
+		
+		last_num=num;
+		for(i=0;i<num;i++)
+		{
+			tp_str_now.tp_id[i];
+		}
+		if(num==0)
 		{
 			input_report_key(priv->input, BTN_TOUCH, 0);
 		}else
