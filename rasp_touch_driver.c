@@ -178,7 +178,7 @@ static void gt1151_ts_poscheck(struct work_struct *work)
 	unsigned char temp;
 	u8 buf[5];
 	int ret;
-	
+	int up=0;
 	mutex_lock(&priv->mutex); 
 	
 	//读取触摸点的状态
@@ -208,18 +208,27 @@ static void gt1151_ts_poscheck(struct work_struct *work)
 			//printk("%02x %02x %02x %02x %02x \r\n",buf[0],buf[1],buf[2],buf[3],buf[4]);
 			printk("x:%d  y:%d\r\n",tp_str_now.tp_x[i],tp_str_now.tp_y[i]);
 			
-			
 			input_mt_slot(priv->input, tp_str_now.tp_id[i]);
-	 		input_mt_report_slot_state(priv->input, MT_TOOL_FINGER, true);
-			input_report_abs(priv->input, ABS_MT_POSITION_X, tp_str_now.tp_x[i]);
-			input_report_abs(priv->input, ABS_MT_POSITION_Y, tp_str_now.tp_y[i]);
-			//input_report_abs(priv->input, ABS_MT_TOUCH_MAJOR, input_w);
-			//input_report_abs(priv->input, ABS_MT_WIDTH_MAJOR, input_w);
-			
-			
-			
+			if(buf[0]&0x08)
+			{
+				input_mt_report_slot_state(priv->input, MT_TOOL_FINGER, true);
+				input_report_abs(priv->input, ABS_MT_POSITION_X, tp_str_now.tp_x[i]);
+				input_report_abs(priv->input, ABS_MT_POSITION_Y, tp_str_now.tp_y[i]);
+				//input_report_abs(priv->input, ABS_MT_TOUCH_MAJOR, input_w);
+				//input_report_abs(priv->input, ABS_MT_WIDTH_MAJOR, input_w);
+			}else
+			{
+				up++;
+				input_mt_report_slot_state(priv->input, MT_TOOL_FINGER, false);
+			}
 			input_mt_sync(priv->input);
-			
+		}
+		if(up==num)
+		{
+			input_report_key(priv->input, BTN_TOUCH, 0);
+		}else
+		{
+			input_report_key(priv->input, BTN_TOUCH,num > 0);
 		}
 		input_sync(priv->input);
 	}
@@ -507,5 +516,5 @@ module_init(gt1151_ts_init);
 module_exit(gt1151_ts_exit);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("CJOK <cjok.liao@gmail.com>");
+MODULE_AUTHOR("DFRobot");
 MODULE_DESCRIPTION("gt1151 touchscreen driver");
