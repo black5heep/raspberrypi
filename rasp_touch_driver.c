@@ -207,7 +207,7 @@ static void gt1151_ts_poscheck(struct work_struct *work)
 			tp_str_now.tp_x[i]=((u16)buf[2]<<8)+buf[1];
 			tp_str_now.tp_y[i]=((u16)buf[4]<<8)+buf[3];
 			//printk("%02x %02x %02x %02x %02x \r\n",buf[0],buf[1],buf[2],buf[3],buf[4]);
-			printk("x:%d  y:%d\r\n",tp_str_now.tp_x[i],tp_str_now.tp_y[i]);
+			//printk("x:%d  y:%d\r\n",tp_str_now.tp_x[i],tp_str_now.tp_y[i]);
 			
 			input_mt_slot(priv->input, tp_str_now.tp_id[i]);
 			
@@ -216,8 +216,9 @@ static void gt1151_ts_poscheck(struct work_struct *work)
 			input_report_abs(priv->input, ABS_MT_POSITION_Y, tp_str_now.tp_y[i]);
 			//input_report_abs(priv->input, ABS_MT_TOUCH_MAJOR, input_w);
 			//input_report_abs(priv->input, ABS_MT_WIDTH_MAJOR, input_w);
-			
+			//input_report_key(priv->input, BTN_TOUCH,1);
 			input_mt_sync(priv->input);
+			printk("id:%d   true\n",tp_str_now.tp_id[i]);
 		}
 		
 		if(num<last_num)
@@ -236,7 +237,9 @@ static void gt1151_ts_poscheck(struct work_struct *work)
 				if(flag==0)
 				{
 					input_mt_slot(priv->input, last_id[i]);
+					printk("id:%d   false\n",last_id[i]);
 					input_mt_report_slot_state(priv->input, MT_TOOL_FINGER, false);
+					//input_report_key(priv->input, BTN_TOUCH, 0);
 					input_mt_sync(priv->input);
 				}
 				
@@ -246,15 +249,16 @@ static void gt1151_ts_poscheck(struct work_struct *work)
 		last_num=num;
 		for(i=0;i<num;i++)
 		{
-			tp_str_now.tp_id[i];
+			last_id[i]=tp_str_now.tp_id[i];
 		}
+		/*
 		if(num==0)
 		{
 			input_report_key(priv->input, BTN_TOUCH, 0);
 		}else
 		{
 			input_report_key(priv->input, BTN_TOUCH,num > 0);
-		}
+		}*/
 		input_sync(priv->input);
 	}
 	
