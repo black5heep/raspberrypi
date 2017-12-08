@@ -5,6 +5,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/input.h>
+#include <linux/input/mt.h>
 #include <linux/interrupt.h>
 #include <linux/pm.h>
 #include <linux/slab.h>
@@ -172,30 +173,6 @@ tp_str tp_str_now;
 //延迟工作队列
 static void gt1151_ts_poscheck(struct work_struct *work)  
 {  
-    struct it7260_ts_priv *priv = container_of(work,   
-                struct it7260_ts_priv, work.work);  
-    unsigned char buf[14];  
-    unsigned short xpos[3] = {0}, ypos[3] = {0};  
-    unsigned char event[3] = {0};  
-    unsigned char query = 0;  
-    int ret, i;  
-  
-    mutex_lock(&priv->mutex);  
-  
-     
-  
-out:  
-    mutex_unlock(&priv->mutex);  
-    enable_irq(priv->irq);  
-}  
-
-
-
-
-
-//延迟工作队列
-static void gt1151_ts_poscheck(struct work_struct *work)  
-{  
     struct gt1151_ts_priv *priv = container_of(work,struct gt1151_ts_priv, work.work);  
     u8 num=0,i;
 	unsigned char temp;
@@ -221,23 +198,30 @@ static void gt1151_ts_poscheck(struct work_struct *work)
 	if((num < 11)&&(num != 0))
 	{
 		//printk("n:%d\r\n",num);
-		//for(i=0;i<num;i++)
+		for(i=0;i<num;i++)
 		{
 			ret=i2c_master_read_gt1151(priv->client,GT1151_TPX_TBL[i], buf, 5);
-			printk("ret=:%d\r\n",ret);
+			//printk("ret=:%d\r\n",ret);
 			tp_str_now.tp_id[i]=buf[0]&0x0f;
 			tp_str_now.tp_x[i]=((u16)buf[2]<<8)+buf[1];
 			tp_str_now.tp_y[i]=((u16)buf[4]<<8)+buf[3];
-			printk("%02x %02x %02x %02x %02x \r\n",buf[0],buf[1],buf[2],buf[3],buf[4]);
+			//printk("%02x %02x %02x %02x %02x \r\n",buf[0],buf[1],buf[2],buf[3],buf[4]);
 			printk("x:%d  y:%d\r\n",tp_str_now.tp_x[i],tp_str_now.tp_y[i]);
-			//input_report_key(priv->input,ABS_MT_TRACKING_ID,tp_str_now.tp_id[i]);
-			//input_report_key(priv->input, BTN_TOUCH, 1);
-			//input_report_abs(priv->input, ABS_MT_POSITION_X, tp_str_now.tp_x[i]);
-			//input_report_abs(priv->input, ABS_MT_POSITION_Y, tp_str_now.tp_y[i]);
-			//input_mt_sync(priv->input);
+			
+			
+			input_mt_slot(priv->input, tp_str_now.tp_id[i]);
+	 		input_mt_report_slot_state(priv->input, MT_TOOL_FINGER, true);
+			input_report_abs(priv->input, ABS_MT_POSITION_X, tp_str_now.tp_x[i]);
+			input_report_abs(priv->input, ABS_MT_POSITION_Y, tp_str_now.tp_y[i]);
+			//input_report_abs(priv->input, ABS_MT_TOUCH_MAJOR, input_w);
+			//input_report_abs(priv->input, ABS_MT_WIDTH_MAJOR, input_w);
+			
+			
+			
+			input_mt_sync(priv->input);
 			
 		}
-		//input_sync(priv->input);
+		input_sync(priv->input);
 	}
 	
 	temp=0x00;
@@ -385,21 +369,23 @@ static int gt1151_ts_probe(struct i2c_client *client,
 	
 	dev_set_drvdata(&client->dev, priv);
 
-	/* 分配一个input设备 */
-	input = input_allocate_device();
+
+      input = input_allocate_device();
 	if (!input) {
-		dev_err(&client->dev, "failed to allocate input device\n");
-		error = -ENOMEM;
-		goto err1;
+		printk("Failed to allocate input device.");
+		return -ENOMEM;
 	}
+	__set_bit(EV_SYN,input->evbit);
+	__set_bit(EV_ABS,input->evbit);
+	__set_bit(EV_KEY,input->evbit);
+	__set_bit(BTN_TOUCH,input->keybit);
+	 
+	input_set_abs_params(input, ABS_MT_POSITION_X,0, 720, 0, 0);
+	input_set_abs_params(input, ABS_MT_POSITION_Y,0, 1280, 0, 0);
+	//input_set_abs_params(input, ABS_MT_WIDTH_MAJOR, 0, 255, 0, 0);
+	//input_set_abs_params(input, ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0);
 
-	/* 设置input设备所支持的事件类型 */
-	input->evbit[0] = BIT_MASK(EV_KEY) | BIT_MASK(EV_ABS);
-	__set_bit(BTN_TOUCH, input->keybit);
-
-	input_set_abs_params(input, ABS_MT_TRACKING_ID, 0, 10, 0, 0);
-	input_set_abs_params(input, ABS_MT_POSITION_X, 0,720 ,0, 0);
-	input_set_abs_params(input, ABS_MT_POSITION_Y, 0,1280,0, 0);
+	input_mt_init_slots(input,10,INPUT_MT_DIRECT | INPUT_MT_DROP_UNUSED);
 
 	input->name = "gt1151 touch screen";
 	input->phys = "I2C";
@@ -416,7 +402,7 @@ static int gt1151_ts_probe(struct i2c_client *client,
 	/* 向输入子系统注册此input设备 */
 	error = input_register_device(input);
 	if (error) {
-		dev_err(&client->dev, "failed to register input device\n");
+		printk("failed to register input device\n");
 		goto err1;
 	}
 	
