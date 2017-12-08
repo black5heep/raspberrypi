@@ -8,7 +8,7 @@ static struct i2c_board_info gt1151_info = {
 };
 static struct i2c_client *gt1151_client;
 
-static int gt1151_dev_init(void)
+int gt1151_dev_init(void)
 {
 	struct i2c_adapter *i2c_adap;
 
@@ -19,10 +19,10 @@ static int gt1151_dev_init(void)
 	return 0;
 
 }
-static void gt1151_dev_exit(void)
+void gt1151_dev_exit(void)
 {
 	i2c_unregister_device(gt1151_client);
 }
-module_init(gt1151_dev_init);
-module_exit(gt1151_dev_exit);
-MODULE_LICENSE("GPL");
+//module_init(gt1151_dev_init);
+//module_exit(gt1151_dev_exit);
+//MODULE_LICENSE("GPL");

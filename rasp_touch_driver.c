@@ -14,7 +14,8 @@
 #include <linux/timer.h>
 #include <linux/delay.h>
 
-
+extern int gt1151_dev_init(void);
+extern void gt1151_dev_exit(void);
 /* register address */
 #define GT_CTRL_REG 	0X8040   	//GT1151控制寄存器
 #define GT_CFGS_REG 	0X8050   	//GT1151配置起始地址寄存器
@@ -528,12 +529,14 @@ static int __init gt1151_ts_init(void)
 		printk("ioremap err\r\n");
 	}
 	i2c_add_driver(&gt1151_ts_driver);	
+	
+	gt1151_dev_init();
 }
 
 /* 模块卸载函数 */
 static void __exit gt1151_ts_exit(void)
 {
-	
+	gt1151_dev_exit();
 	i2c_del_driver(&gt1151_ts_driver);
 	gpio_free(RST_PIN);
 	gpio_free(INT_PIN);
